@@ -1,0 +1,571 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GEO Audit &mdash; AI Citation Readiness</title>
+  <style>
+    /* ── Tokens ── */
+    :root {
+      --bg:      #080f1e;
+      --bg2:     #0d1628;
+      --surface: #111d30;
+      --surf2:   #162038;
+      --border:  #1e2f4a;
+      --border2: #263a57;
+      --primary: #5a67d8;
+      --pri-hl:  #7c87e8;
+      --text:    #dce6f5;
+      --sub:     #8fa3be;
+      --muted:   #546a85;
+      --green:   #34d399;
+      --yellow:  #fbbf24;
+      --red:     #f87171;
+      --radius:  10px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* ── Page shell ── */
+    .page { max-width: 1080px; margin: 0 auto; padding: 2.5rem 1.5rem 5rem; }
+
+    /* ── Header ── */
+    .header { margin-bottom: 2.5rem; }
+    .header-inner { display: flex; align-items: center; gap: 1rem; margin-bottom: .35rem; }
+    .logo-icon {
+      width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+      background: linear-gradient(135deg, #5a67d8, #9f7aea);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .8rem; font-weight: 900; color: #fff; letter-spacing: -.5px;
+    }
+    .logo-text {
+      font-size: 1.5rem; font-weight: 800; letter-spacing: -.4px;
+      background: linear-gradient(120deg, #7c87e8, #b794f4);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .header-sub { color: var(--sub); font-size: .85rem; padding-left: 3rem; }
+
+    /* ── Search row ── */
+    .search-row {
+      display: flex; gap: .6rem; align-items: stretch;
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: var(--radius); padding: .45rem .45rem .45rem 1.1rem;
+      margin-bottom: 1.25rem; transition: border-color .2s;
+    }
+    .search-row:focus-within { border-color: var(--primary); }
+    .search-row input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--text); font-size: 1rem; min-width: 0;
+    }
+    .search-row input::placeholder { color: var(--muted); }
+    .search-row button {
+      background: var(--primary); color: #fff; border: none;
+      border-radius: 7px; padding: .6rem 1.4rem;
+      font-size: .9rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+      transition: background .15s, transform .1s;
+    }
+    .search-row button:hover:not(:disabled) { background: var(--pri-hl); }
+    .search-row button:active:not(:disabled) { transform: scale(.98); }
+    .search-row button:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ── Status ── */
+    .status {
+      border-radius: 8px; padding: .55rem 1rem; margin-bottom: 1.25rem;
+      font-size: .88rem; font-weight: 500; text-align: center;
+      min-height: 2rem; display: flex; align-items: center; justify-content: center;
+    }
+    .status.loading { background: #1a2e5c; color: #93c5fd; border: 1px solid #1e3a78; }
+    .status.error   { background: #3b0c0c; color: #fca5a5; border: 1px solid #7f1d1d; }
+
+    /* ── RESULTS ── */
+    #results { display: none; }
+
+    /* ── Section dividers ── */
+    .sec {
+      display: flex; align-items: center; gap: .75rem;
+      margin: 1.6rem 0 .8rem; color: var(--muted);
+      font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .12em;
+    }
+    .sec::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.25rem 1.5rem;
+    }
+    .card-head {
+      font-size: .72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .1em; color: var(--muted); margin-bottom: 1rem;
+    }
+
+    /* ── Hero two-column ── */
+    .hero { display: grid; grid-template-columns: 190px 1fr; gap: 1rem; align-items: stretch; }
+
+    /* Score card */
+    .score-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.5rem 1rem;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .6rem;
+    }
+    .ring-wrap { position: relative; width: 120px; height: 120px; }
+    .ring-wrap svg { transform: rotate(-90deg); display: block; }
+    .ring-bg  { stroke: var(--border2); }
+    .ring-fg  { transition: stroke-dashoffset 1s cubic-bezier(.4,0,.2,1); }
+    .ring-center {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .ring-num  { font-size: 2rem; font-weight: 800; line-height: 1; }
+    .ring-denom { font-size: .6rem; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
+    .grade-pill {
+      font-size: .72rem; font-weight: 700; padding: .18rem .75rem;
+      border-radius: 999px; text-transform: uppercase; letter-spacing: .06em;
+    }
+    .grade-A { background: #052e1855; color: #6ee7b7; border: 1px solid #065f3666; }
+    .grade-B { background: #14391655; color: #a7f3d0; border: 1px solid #15803d66; }
+    .grade-C { background: #451a0355; color: #fde68a; border: 1px solid #92400e66; }
+    .grade-D { background: #450a0a55; color: #fca5a5; border: 1px solid #991b1b66; }
+    .score-sub { font-size: .65rem; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
+
+    /* Snapshot card */
+    .snap-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.25rem 1.5rem;
+    }
+    .snap-title { font-size: 1.05rem; font-weight: 700; line-height: 1.3; margin-bottom: .3rem; }
+    .snap-url {
+      font-size: .75rem; color: var(--pri-hl); font-family: 'Fira Code', 'Consolas', monospace;
+      word-break: break-all; margin-bottom: .85rem;
+    }
+    .snap-stats { display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: .85rem; }
+    .stat-chip {
+      background: var(--surf2); border: 1px solid var(--border);
+      border-radius: 6px; padding: .18rem .65rem; font-size: .76rem; color: var(--sub);
+    }
+    .stat-chip b { color: var(--text); }
+    .snap-desc { font-size: .82rem; color: var(--sub); line-height: 1.5; margin-bottom: .9rem; }
+    .schema-row { display: flex; align-items: center; gap: .6rem; padding-top: .75rem; border-top: 1px solid var(--border); }
+    .schema-label { font-size: .72rem; color: var(--muted); font-weight: 600; white-space: nowrap; }
+    .schema-chip {
+      font-family: 'Fira Code', 'Consolas', monospace; font-size: .78rem; font-weight: 700;
+      background: #23195a55; color: #a5b4fc; border: 1px solid #3730a355;
+      border-radius: 6px; padding: .14rem .55rem;
+    }
+    .conf-wrap { flex: 1; display: flex; align-items: center; gap: .5rem; min-width: 0; }
+    .conf-track { flex: 1; height: 4px; background: var(--border2); border-radius: 4px; overflow: hidden; }
+    .conf-fill  { height: 100%; background: var(--primary); border-radius: 4px; transition: width .9s ease; }
+    .conf-pct   { font-size: .72rem; color: var(--muted); white-space: nowrap; }
+
+    /* ── Score bars ── */
+    .score-grid { display: flex; flex-direction: column; gap: .7rem; }
+    .sbar { }
+    .sbar-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: .28rem; }
+    .sbar-name { font-size: .86rem; font-weight: 600; }
+    .sbar-right { display: flex; align-items: center; gap: .65rem; }
+    .sbar-detail { font-size: .72rem; color: var(--muted); }
+    .sbar-val { font-size: .86rem; font-weight: 700; min-width: 2rem; text-align: right; }
+    .sbar-track { height: 6px; background: var(--border2); border-radius: 4px; overflow: hidden; }
+    .sbar-fill { height: 100%; border-radius: 4px; transition: width .8s cubic-bezier(.4,0,.2,1); }
+
+    /* ── Recommendations ── */
+    .recs { display: flex; flex-direction: column; gap: .45rem; }
+    .rec {
+      display: flex; align-items: flex-start; gap: .8rem;
+      padding: .6rem .9rem; border-radius: 8px; font-size: .85rem; line-height: 1.5;
+    }
+    .rec.hi  { background: #2d080822; border: 1px solid #f8717130; }
+    .rec.med { background: #2d1b0022; border: 1px solid #fbbf2430; }
+    .rec.lo  { background: #022d1a22; border: 1px solid #34d39930; }
+    .sev-dot {
+      width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: .45rem;
+    }
+    .rec.hi  .sev-dot { background: var(--red); }
+    .rec.med .sev-dot { background: var(--yellow); }
+    .rec.lo  .sev-dot { background: var(--green); }
+    .rec-ok {
+      text-align: center; color: var(--green); font-size: .88rem;
+      font-weight: 600; padding: .5rem;
+    }
+
+    /* ── Two-column grid (headings + JSON) ── */
+    .split { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .split .card { margin: 0; }
+
+    /* Headings list */
+    .h-list { display: flex; flex-direction: column; }
+    .h-item {
+      display: flex; align-items: baseline; gap: .55rem;
+      padding: .3rem 0; border-bottom: 1px solid var(--border);
+      font-size: .83rem;
+    }
+    .h-item:last-child { border-bottom: none; }
+    .h-tag {
+      font-family: 'Fira Code', monospace; font-size: .65rem; font-weight: 800;
+      padding: .06rem .35rem; border-radius: 4px; color: #fff;
+      text-transform: uppercase; flex-shrink: 0;
+    }
+    .h-tag.h1 { background: #4f46e5; }
+    .h-tag.h2 { background: #0284c7; }
+    .h-tag.h3 { background: #059669; }
+    .h-tag.h4, .h-tag.h5, .h-tag.h6 { background: #475569; }
+    .h-text { color: var(--sub); line-height: 1.4; }
+
+    /* ── JSON-LD ── */
+    .jld-meta { display: flex; align-items: baseline; flex-wrap: wrap; gap: .6rem; margin-bottom: .75rem; }
+    .badge {
+      display: inline-block; border-radius: 999px; padding: .15rem .6rem;
+      font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    }
+    .badge.llm   { background: #2d1d5e55; color: #c4b5fd; border: 1px solid #4c1d9555; }
+    .badge.rules { background: #0c2a3555; color: #67e8f9; border: 1px solid #0e7490aa; }
+    .jld-reason { font-size: .8rem; color: var(--sub); line-height: 1.5; }
+    .code-block {
+      background: #050b14; border: 1px solid var(--border); border-radius: 8px;
+      padding: 1rem; overflow-x: auto; position: relative;
+      font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+      font-size: .78rem; line-height: 1.7;
+    }
+    .copy-btn {
+      position: absolute; top: .5rem; right: .5rem;
+      background: var(--surf2); color: var(--sub); border: 1px solid var(--border);
+      border-radius: 5px; padding: .22rem .6rem; font-size: .7rem; font-weight: 600;
+      cursor: pointer; transition: all .15s;
+    }
+    .copy-btn:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    /* JSON syntax */
+    .jk { color: #93c5fd; }
+    .js { color: #6ee7b7; }
+    .jn { color: #fde68a; }
+    .jb { color: #f9a8d4; }
+    .jx { color: #94a3b8; }
+    .jp { color: #334155; }
+
+    /* ── Images ── */
+    .img-grid { display: flex; flex-wrap: wrap; gap: .6rem; }
+    .img-grid img {
+      width: 84px; height: 84px; object-fit: cover;
+      border-radius: 8px; border: 1px solid var(--border);
+      transition: transform .15s;
+    }
+    .img-grid img:hover { transform: scale(1.06); }
+
+    /* ── Responsive ── */
+    @media (max-width: 720px) {
+      .hero  { grid-template-columns: 1fr; }
+      .split { grid-template-columns: 1fr; }
+      .header-sub { padding-left: 0; }
+    }
+
+    @media (max-width: 500px) {
+      .page { padding: 1.5rem 1rem 3rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-inner">
+      <div class="logo-icon">GEO</div>
+      <span class="logo-text">GEO Audit</span>
+    </div>
+    <div class="header-sub">Scrape any public URL &mdash; score AI citation readiness &mdash; get a JSON-LD schema recommendation</div>
+  </div>
+
+  <!-- Search -->
+  <div class="search-row">
+    <input id="urlInput" type="text" placeholder="https://stripe.com" autocomplete="off" spellcheck="false" />
+    <button id="auditBtn" onclick="runAudit()">Run Audit &rarr;</button>
+  </div>
+
+  <!-- Status -->
+  <div id="statusMsg" class="status"></div>
+
+  <!-- ════════════ RESULTS ════════════ -->
+  <div id="results">
+
+    <!-- Hero row -->
+    <div class="sec">Overview</div>
+    <div class="hero">
+
+      <!-- Score ring -->
+      <div class="score-card">
+        <div class="ring-wrap">
+          <svg width="120" height="120">
+            <circle class="ring-bg" cx="60" cy="60" r="50" fill="none" stroke-width="9" />
+            <circle id="ringArc" class="ring-fg" cx="60" cy="60" r="50" fill="none"
+              stroke-width="9" stroke-linecap="round"
+              stroke-dasharray="314" stroke-dashoffset="314" />
+          </svg>
+          <div class="ring-center">
+            <span id="ringNum" class="ring-num">0</span>
+            <span class="ring-denom">/ 100</span>
+          </div>
+        </div>
+        <span id="gradeEl" class="grade-pill grade-D">&mdash;</span>
+        <span class="score-sub">GEO Readiness</span>
+      </div>
+
+      <!-- Page snapshot -->
+      <div class="snap-card">
+        <div class="card-head">Page Snapshot</div>
+        <div id="snapTitle" class="snap-title"></div>
+        <div id="snapUrl"   class="snap-url"></div>
+        <div id="snapStats" class="snap-stats"></div>
+        <div id="snapDesc"  class="snap-desc"></div>
+        <div class="schema-row">
+          <span class="schema-label">Schema</span>
+          <span id="schemaChip" class="schema-chip"></span>
+          <div class="conf-wrap">
+            <div class="conf-track"><div id="confFill" class="conf-fill" style="width:0"></div></div>
+            <span id="confPct" class="conf-pct"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category scores -->
+    <div class="sec">Category Scores</div>
+    <div class="card">
+      <div id="scoreBars" class="score-grid"></div>
+    </div>
+
+    <!-- Recommendations -->
+    <div class="sec">Recommendations</div>
+    <div class="card">
+      <div id="recsEl" class="recs"></div>
+    </div>
+
+    <!-- Headings -->
+    <div class="sec">Heading Structure</div>
+    <div class="card">
+      <div id="headingsEl" class="h-list"></div>
+    </div>
+
+    <!-- JSON-LD -->
+    <div class="sec">JSON-LD Recommendation</div>
+    <div class="card">
+      <div class="jld-meta">
+        <span id="llmBadge" class="badge"></span>
+        <span id="jldReason" class="jld-reason"></span>
+      </div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyJson()">Copy</button>
+        <pre id="jldCode"></pre>
+      </div>
+    </div>
+
+    <!-- Images (conditional) -->
+    <div id="imgSection" style="display:none">
+      <div class="sec">Images Found</div>
+      <div class="card">
+        <div id="imgGrid" class="img-grid"></div>
+      </div>
+    </div>
+
+  </div><!-- /results -->
+</div><!-- /page -->
+
+<script>
+const API = '/api/v1/audit';
+
+/* ── Run audit ── */
+async function runAudit() {
+  let url = document.getElementById('urlInput').value.trim();
+  if (!url) return setStatus('Please enter a URL.', 'error');
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+
+  const btn = document.getElementById('auditBtn');
+  btn.disabled = true;
+  btn.textContent = 'Scanning...';
+  document.getElementById('results').style.display = 'none';
+  setStatus('Fetching and analysing page, please wait...', 'loading');
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 60000);
+
+  try {
+    const res = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.error || e.detail || 'HTTP ' + res.status);
+    }
+    render(await res.json());
+    setStatus('');
+  } catch (e) {
+    setStatus(
+      e.name === 'AbortError'
+        ? 'Request timed out (60 s). The target site may be too slow.'
+        : 'Error: ' + (e.message || 'Something went wrong'),
+      'error'
+    );
+  } finally {
+    clearTimeout(timer);
+    btn.disabled = false;
+    btn.textContent = 'Run Audit \u2192';
+  }
+}
+
+function setStatus(msg, cls) {
+  const el = document.getElementById('statusMsg');
+  el.textContent = msg;
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+
+/* ── Color helpers ── */
+function scoreColor(n) {
+  return n >= 80 ? 'var(--green)' : n >= 50 ? 'var(--yellow)' : 'var(--red)';
+}
+function gradeOf(n) {
+  if (n >= 90) return { label: 'Excellent', cls: 'grade-A' };
+  if (n >= 75) return { label: 'Good',      cls: 'grade-B' };
+  if (n >= 50) return { label: 'Fair',      cls: 'grade-C' };
+  return             { label: 'Poor',       cls: 'grade-D' };
+}
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+/* ── JSON highlighter ── */
+function hlJson(obj) {
+  return JSON.stringify(obj, null, 2).replace(
+    /("(?:[^"\\]|\\.)*")\s*:|("(?:[^"\\]|\\.)*")|(\btrue\b|\bfalse\b)|(null)|(-?\d+(?:\.\d+)?)|([{}\[\],:])/g,
+    (m, key, str, bool, nil, num, punc) => {
+      if (key)  return '<span class="jk">' + esc(m.slice(0,-1).slice(1,-1)) + '</span>:';
+      if (str)  return '<span class="js">' + esc(m) + '</span>';
+      if (bool) return '<span class="jb">' + m + '</span>';
+      if (nil)  return '<span class="jx">' + m + '</span>';
+      if (num)  return '<span class="jn">' + m + '</span>';
+      if (punc) return '<span class="jp">' + m + '</span>';
+      return m;
+    }
+  );
+}
+
+/* ── Render ── */
+function render(data) {
+  const { extracted_data: ed, audit_summary: au, schema_recommendation: sr, llm_used } = data;
+
+  /* Score ring */
+  const circ = 314;
+  const arc  = document.getElementById('ringArc');
+  arc.style.stroke          = scoreColor(au.overall_score);
+  arc.style.strokeDashoffset = circ - circ * (au.overall_score / 100);
+  const num = document.getElementById('ringNum');
+  num.textContent = au.overall_score;
+  num.style.color = scoreColor(au.overall_score);
+
+  const g = gradeOf(au.overall_score);
+  const gEl = document.getElementById('gradeEl');
+  gEl.textContent = g.label;
+  gEl.className = 'grade-pill ' + g.cls;
+
+  /* Snapshot */
+  document.getElementById('snapTitle').textContent = ed.title || '(No title)';
+  document.getElementById('snapUrl').textContent   = ed.url;
+  document.getElementById('snapDesc').textContent  = ed.meta_description || '(No meta description found)';
+
+  document.getElementById('snapStats').innerHTML = [
+    { k: 'Words',    v: ed.word_count.toLocaleString() },
+    { k: 'Language', v: ed.language || 'unknown' },
+    { k: 'Headings', v: ed.headings.length },
+    { k: 'Images',   v: ed.image_urls.length },
+  ].map(p => `<div class="stat-chip"><b>${p.v}</b>&nbsp;${p.k}</div>`).join('');
+
+  document.getElementById('schemaChip').textContent = sr.schema_type;
+  const conf = Math.round(sr.confidence * 100);
+  document.getElementById('confFill').style.width = conf + '%';
+  document.getElementById('confPct').textContent   = conf + '% confidence';
+
+  /* Score bars */
+  document.getElementById('scoreBars').innerHTML = au.scores.map(s => `
+    <div class="sbar">
+      <div class="sbar-top">
+        <span class="sbar-name">${esc(s.category)}</span>
+        <span class="sbar-right">
+          <span class="sbar-detail">${esc(s.details)}</span>
+          <span class="sbar-val" style="color:${scoreColor(s.score)}">${s.score}</span>
+        </span>
+      </div>
+      <div class="sbar-track">
+        <div class="sbar-fill" style="width:${s.score}%;background:${scoreColor(s.score)}"></div>
+      </div>
+    </div>`).join('');
+
+  /* Recommendations */
+  const recsEl = document.getElementById('recsEl');
+  if (!au.recommendations.length) {
+    recsEl.innerHTML = '<div class="rec-ok">All checks passed &mdash; this page looks well-optimised.</div>';
+  } else {
+    recsEl.innerHTML = au.recommendations.map(r => {
+      const l = r.toLowerCase();
+      const sev = (l.includes('missing') || l.includes('no ') || l.includes('none')) ? 'hi'
+                : (l.includes('short') || l.includes('thin') || l.includes('brief') || l.includes('multiple')) ? 'med'
+                : 'lo';
+      return `<div class="rec ${sev}"><span class="sev-dot"></span>${esc(r)}</div>`;
+    }).join('');
+  }
+
+  /* Headings */
+  const hEl = document.getElementById('headingsEl');
+  hEl.innerHTML = ed.headings.length
+    ? ed.headings.map(h =>
+        `<div class="h-item"><span class="h-tag ${esc(h.level)}">${esc(h.level.toUpperCase())}</span><span class="h-text">${esc(h.text)}</span></div>`
+      ).join('')
+    : '<span style="color:var(--muted);font-size:.84rem">No headings detected on this page.</span>';
+
+  /* JSON-LD */
+  const badge = document.getElementById('llmBadge');
+  badge.textContent = llm_used ? 'LLM-enhanced' : 'Rule-based';
+  badge.className   = 'badge ' + (llm_used ? 'llm' : 'rules');
+  document.getElementById('jldReason').textContent = sr.reasoning;
+  document.getElementById('jldCode').innerHTML = hlJson(sr.json_ld);
+
+  /* Images */
+  if (ed.image_urls.length) {
+    document.getElementById('imgSection').style.display = 'block';
+    document.getElementById('imgGrid').innerHTML = ed.image_urls.map(u =>
+      `<img src="${esc(u)}" alt="page image" loading="lazy" onerror="this.style.display='none'" />`
+    ).join('');
+  } else {
+    document.getElementById('imgSection').style.display = 'none';
+  }
+
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ── Copy ── */
+function copyJson() {
+  navigator.clipboard.writeText(document.getElementById('jldCode').textContent).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1500);
+  });
+}
+
+/* ── Enter key ── */
+document.getElementById('urlInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') runAudit();
+});
+</script>
+</body>
+</html>
